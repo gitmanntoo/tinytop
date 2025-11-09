@@ -1,15 +1,15 @@
 package core
 
 import (
-	"context"
+	// "context"
 	"encoding/json"
-	"os"
-	"os/signal"
-	"syscall"
+	"fmt"
+	// "os"
+	// "os/signal"
+	// "syscall"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/host"
+	"github.com/gitmanntoo/tinytop/pkg/psutil"
 	"github.com/gitmanntoo/tinytop/pkg/system"
 	"github.com/gitmanntoo/tinytop/pkg/utils"
 )
@@ -72,75 +72,74 @@ func (a *App) Run() error {
 		Dur("duration", a.config.Duration).
 		Msg("Collection interval and duration")
 
-	// Get system host information
-	info, err := host.Info()
+	// Get static system information.
+	sysInfo, err := psutil.Info()
 	if err != nil {
-		utils.Log.Error().Err(err).Msg("Failed to get host info")
-	} else {
-		json, err := json.Marshal(info)
-		if err != nil {
-			utils.Log.Error().Err(err).Msg("Failed to marshal host info to JSON")
-		} else {
-			utils.Log.Info().
-				RawJSON("host_info", json).
-				Msg("Host Information (JSON)")
-		}
-	}
+		utils.Log.Error().Err(err).Msg("Failed to get system info")
+		return nil
+	} 
 
-	// Get CPU info
-	cpuInfos, err := cpu.Info()
+	json, err := json.MarshalIndent(sysInfo, "", "  ")
 	if err != nil {
-		utils.Log.Error().Err(err).Msg("Failed to get CPU info")
-	} else {
-		for i, cpuInfo := range cpuInfos {
-			json, err := json.Marshal(cpuInfo)
-			if err != nil {
-				utils.Log.Error().Err(err).Msgf("Failed to marshal CPU %d info to JSON", i)
-			} else {
-				utils.Log.Info().
-					RawJSON("cpu_info", json).
-					Msgf("CPU %d Information (JSON)", i)
-			}
-		}
+		utils.Log.Error().Err(err).Msg("Failed to marshal system info to JSON")
+		return nil
 	}
 
-	// Set up signal handling for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	fmt.Println(string(json))
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	// // Set up signal handling for graceful shutdown
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
 
-	go func() {
-		<-sigChan
-		utils.Log.Info().Msg("Received interrupt signal, exiting...")
-		cancel()
-	}()
+	// sigChan := make(chan os.Signal, 1)
+	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	endTime := time.Now().Add(a.config.Duration)
-	currentTime := time.Now()
-	for currentTime.Before(endTime) {
-		// Check if context was cancelled (Ctrl-C pressed)
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
+	// go func() {
+	// 	<-sigChan
+	// 	utils.Log.Info().Msg("Received interrupt signal, exiting...")
+	// 	cancel()
+	// }()
 
-		currentTime = currentTime.Add(a.config.Interval)
-		if currentTime.After(endTime) || time.Now().After(endTime) {
-			break
-		} else {
-			// Sleep with context awareness
-			timer := time.NewTimer(time.Until(currentTime))
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return nil
-			case <-timer.C:
-			}
-		}
-	}
+	// endTime := time.Now().Add(a.config.Duration)
+	// currentTime := time.Now()
+	// for currentTime.Before(endTime) {
+	// 	// Check if context was cancelled (Ctrl-C pressed)
+	// 	select {
+	// 	case <-ctx.Done():
+	// 		return nil
+	// 	default:
+	// 	}
+
+	// 	// Get CPU times
+	// 	if cpuTimes, err := cpu.Times(true); err != nil {
+	// 		utils.Log.Error().Err(err).Msg("Failed to get CPU times")
+	// 	} else {
+	// 		for i, cpuTime := range cpuTimes {
+	// 			json, err := json.Marshal(cpuTime)
+	// 			if err != nil {
+	// 				utils.Log.Error().Err(err).Msgf("Failed to marshal CPU %d times to JSON", i)
+	// 			} else {
+	// 				utils.Log.Info().
+	// 					RawJSON("cpu_times", json).
+	// 					Msgf("CPU %d Times (JSON)", i)
+	// 			}
+	// 		}
+	// 	}
+
+	// 	currentTime = currentTime.Add(a.config.Interval)
+	// 	if currentTime.After(endTime) || time.Now().After(endTime) {
+	// 		break
+	// 	} else {
+	// 		// Sleep with context awareness
+	// 		timer := time.NewTimer(time.Until(currentTime))
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			timer.Stop()
+	// 			return nil
+	// 		case <-timer.C:
+	// 		}
+	// 	}
+	// }
 
 	return nil
 }
